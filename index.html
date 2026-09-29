@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>등대 수신함</title>
+<meta name="description" content="공고감시 봇이 모은 새 공고를 확인하고 노션 지원 이력에 추가하거나 버린다.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔦</text></svg>">
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1a1d22; --muted: #6b7280; --line: #e5e7eb;
+    --accent: #2b6cb0; --accent-ink: #ffffff; --danger: #c0392b; --ok: #1e7f4f; --warn: #b45309;
+    --chip: #eef2f7; --chip-on: #1a1d22; --chip-on-ink: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1216; --card: #171b21; --text: #e6e8eb; --muted: #9aa3ad; --line: #2a3038;
+      --accent: #5b9bff; --accent-ink: #0b1220; --danger: #ff6b5e; --ok: #4cc38a; --warn: #f5b355;
+      --chip: #222831; --chip-on: #e6e8eb; --chip-on-ink: #0f1216;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1216; --card: #171b21; --text: #e6e8eb; --muted: #9aa3ad; --line: #2a3038;
+    --accent: #5b9bff; --accent-ink: #0b1220; --danger: #ff6b5e; --ok: #4cc38a; --warn: #f5b355;
+    --chip: #222831; --chip-on: #e6e8eb; --chip-on-ink: #0f1216;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 -apple-system, "Pretendard", "Noto Sans KR", system-ui, sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); padding: 10px 16px; display: flex; align-items: center; gap: 10px; }
+  header h1 { font-size: 18px; margin: 0; flex: 1; }
+  header h1 small { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: 6px; }
+  button { font: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 8px; padding: 6px 10px; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+  button.danger { color: var(--danger); }
+  button:disabled { opacity: .5; cursor: default; }
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; padding: 10px 16px 0; }
+  .chip { border-radius: 999px; padding: 4px 12px; background: var(--chip); border: none; font-size: 13px; }
+  .chip.on { background: var(--chip-on); color: var(--chip-on-ink); }
+  main { padding: 12px 16px 60px; max-width: 760px; margin: 0 auto; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin: 0 0 12px; }
+  .card.done { opacity: .75; }
+  .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+  .badge { padding: 2px 8px; border-radius: 6px; background: var(--chip); color: var(--text); }
+  .badge.d { font-weight: 600; }
+  .badge.d.soon { background: var(--danger); color: #fff; }
+  .badge.d.over { text-decoration: line-through; }
+  .badge.st-added { background: var(--ok); color: #fff; }
+  .badge.st-trashed { background: var(--muted); color: #fff; }
+  .badge.st-pending { background: var(--warn); color: #fff; }
+  h2 { font-size: 16px; margin: 6px 0 8px; line-height: 1.35; }
+  h2 a { color: inherit; text-decoration: none; }
+  h2 a:hover { text-decoration: underline; }
+  dl { margin: 0; display: grid; grid-template-columns: 44px 1fr; gap: 4px 10px; font-size: 14px; }
+  dt { color: var(--muted); }
+  dd { margin: 0; }
+  .excerpt { color: var(--muted); font-size: 13px; margin: 6px 0 0; }
+  .actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .actions .sp { flex: 1; }
+  .empty { text-align: center; color: var(--muted); padding: 40px 0; }
+  .setup { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin: 16px auto; max-width: 560px; }
+  .setup input { width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); }
+  .setup ol { padding-left: 18px; color: var(--muted); font-size: 13px; }
+  .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .notion { font-size: 12px; margin-left: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🔦 등대 <small id="count"></small></h1>
+  <button id="refresh" title="새로고침">↻</button>
+  <button id="settings" title="설정">⚙</button>
+</header>
+
+<div class="bar" id="statusBar">
+  <button class="chip on" data-status="new">새로움</button>
+  <button class="chip" data-status="added">추가함</button>
+  <button class="chip" data-status="trashed">버림</button>
+</div>
+<div class="bar" id="catBar"></div>
+
+<main id="main"></main>
+<div class="toast" id="toast"></div>
+
+<script>
+const OWNER = "rkdals0121", REPO = "notice-watcher", FILE = "state/inbox.json";
+const API = `https://api.github.com/repos/${OWNER}/${REPO}`;
+const LS = { token: "deungdae.token", pending: "deungdae.pending", status: "deungdae.status", cat: "deungdae.cat" };
+
+let items = [], statusFilter = "new", catFilter = "전체", pending = {};
+try { statusFilter = localStorage.getItem(LS.status) || "new"; catFilter = localStorage.getItem(LS.cat) || "전체";
+      pending = JSON.parse(localStorage.getItem(LS.pending) || "{}"); } catch (e) {}
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 2200); }
+function token() { try { return localStorage.getItem(LS.token) || ""; } catch (e) { return ""; } }
+function savePending() { try { localStorage.setItem(LS.pending, JSON.stringify(pending)); } catch (e) {} }
+
+function today() { const d = new Date(); return new Date(d.getTime() + 9 * 3600e3).toISOString().slice(0, 10); }
+function dday(deadline) {
+  if (!deadline) return null;
+  const ms = new Date(deadline + "T00:00:00+09:00") - new Date(today() + "T00:00:00+09:00");
+  return Math.round(ms / 864e5);
+}
+
+async function gh(path, opts = {}) {
+  const r = await fetch(API + path, { ...opts, headers: { Authorization: "Bearer " + token(), Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", ...(opts.headers || {}) } });
+  if (r.status === 401 || r.status === 404 && !token()) throw new Error("토큰이 없거나 틀림");
+  return r;
+}
+
+async function load() {
+  if (!token()) { renderSetup(); return; }
+  $("#refresh").disabled = true;
+  try {
+    const r = await gh(`/contents/${FILE}?ref=main&t=${Date.now()}`, { headers: { Accept: "application/vnd.github.raw+json" } });
+    if (!r.ok) throw new Error(`불러오기 실패 ${r.status}`);
+    items = await r.json();
+    // 서버 상태가 바뀐 항목은 대기 표시를 지운다
+    for (const it of items) if (pending[it.id] && it.status !== "new" && it.status === pending[it.id].to) delete pending[it.id];
+    savePending();
+    render();
+  } catch (e) { toast(e.message); if (String(e.message).includes("토큰")) renderSetup(); }
+  $("#refresh").disabled = false;
+}
+
+function renderSetup() {
+  $("#main").innerHTML = `
+  <div class="setup">
+    <h2>처음 설정</h2>
+    <p>이 화면은 GitHub 비공개 저장소의 수신함 파일을 읽습니다. 개인 액세스 토큰을 한 번 넣으면 이 기기에 저장됩니다.</p>
+    <ol>
+      <li>github.com → 우상단 프로필 → Settings → Developer settings → Personal access tokens → <b>Fine-grained tokens</b> → Generate new token</li>
+      <li>Repository access: <b>Only select repositories</b> → <code>notice-watcher</code></li>
+      <li>Permissions → Repository permissions → <b>Contents: Read and write</b> (Metadata는 자동으로 Read)</li>
+      <li>Expiration은 1년으로. 만들어진 <code>github_pat_…</code> 를 아래에 붙여넣기</li>
+    </ol>
+    <input id="tokenInput" type="password" placeholder="github_pat_…" autocomplete="off">
+    <div class="actions"><span class="sp"></span><button class="primary" id="saveToken">저장하고 열기</button></div>
+  </div>`;
+  $("#saveToken").onclick = () => { const v = $("#tokenInput").value.trim(); if (!v) return; try { localStorage.setItem(LS.token, v); } catch (e) {} load(); };
+}
+
+function visible() {
+  return items.filter(it => {
+    const st = pending[it.id] ? "pending" : it.status;
+    const okStatus = statusFilter === "new" ? (it.status === "new") : (it.status === statusFilter);
+    const okCat = catFilter === "전체" || it.category === catFilter;
+    return okStatus && okCat;
+  }).sort((a, b) => {
+    const da = a.deadline || "9999", db = b.deadline || "9999";
+    if (statusFilter !== "new") return (b.processed_at || "").localeCompare(a.processed_at || "");
+    return da.localeCompare(db) || (b.first_seen || "").localeCompare(a.first_seen || "");
+  });
+}
+
+function render() {
+  const cats = ["전체", ...new Set(items.map(i => i.category))];
+  $("#catBar").innerHTML = cats.map(c => `<button class="chip ${c === catFilter ? "on" : ""}" data-cat="${esc(c)}">${esc(c)}</button>`).join("");
+  document.querySelectorAll("#statusBar .chip").forEach(b => b.classList.toggle("on", b.dataset.status === statusFilter));
+  const list = visible();
+  const counts = { new: items.filter(i => i.status === "new").length };
+  $("#count").textContent = `새 공고 ${counts.new}건`;
+  if (!list.length) { $("#main").innerHTML = `<div class="empty">여기엔 아직 아무것도 없어요.</div>`; return; }
+  $("#main").innerHTML = list.map(card).join("");
+}
+
+function card(it) {
+  const d = dday(it.deadline);
+  const dBadge = it.deadline
+    ? `<span class="badge d ${d !== null && d < 0 ? "over" : d !== null && d <= 7 ? "soon" : ""}">${d < 0 ? "마감 지남" : d === 0 ? "오늘 마감" : `D-${d}`} · ${it.deadline.slice(5).replace("-", "/")}</span>`
+    : `<span class="badge">마감 미확인</span>`;
+  const p = pending[it.id];
+  const stBadge = p ? `<span class="badge st-pending">처리 중…</span>`
+    : it.status === "added" ? `<span class="badge st-added">노션에 추가됨</span>${it.notion_url ? `<a class="notion" href="${esc(it.notion_url)}" target="_blank">열기 ↗</a>` : ""}`
+    : it.status === "trashed" ? `<span class="badge st-trashed">버림</span>` : "";
+  const s = it.summary || {};
+  const rows = ["대상", "활동", "자격", "혜택"].filter(k => s[k]).map(k => `<dt>${k}</dt><dd>${esc(s[k])}</dd>`).join("");
+  const body = rows ? `<dl>${rows}</dl>` : (it.excerpt ? `<p class="excerpt">${esc(it.excerpt)}</p>` : `<p class="excerpt">본문을 읽지 못했어요. 원문을 확인하세요.</p>`);
+  const actions = it.status === "new" && !p
+    ? `<button class="danger" data-act="trash" data-id="${it.id}">휴지통</button><span class="sp"></span><a href="${esc(it.url)}" target="_blank"><button>원문</button></a><button class="primary" data-act="add" data-id="${it.id}">노션에 추가</button>`
+    : `<a href="${esc(it.url)}" target="_blank"><button>원문</button></a><span class="sp"></span>${it.status !== "new" && !p ? `<button data-act="restore" data-id="${it.id}">되돌리기</button>` : ""}`;
+  return `<article class="card ${it.status !== "new" ? "done" : ""}">
+    <div class="top"><span class="badge">${esc(it.category)}</span>${dBadge}<span>${esc(it.source)}</span><span>· 발견 ${esc((it.first_seen || "").slice(5).replace("-", "/"))}</span>${stBadge}</div>
+    <h2><a href="${esc(it.url)}" target="_blank">${esc(it.title)}</a></h2>
+    ${body}
+    <div class="actions">${actions}</div>
+  </article>`;
+}
+
+async function act(id, action) {
+  const to = { add: "added", trash: "trashed", restore: "new" }[action];
+  pending[id] = { to, at: Date.now() }; savePending(); render();
+  try {
+    const r = await gh("/dispatches", { method: "POST", body: JSON.stringify({ event_type: "inbox_action", client_payload: { id, action } }) });
+    if (r.status !== 204) throw new Error(`요청 실패 ${r.status}`);
+    toast(action === "add" ? "노션에 추가하는 중… 30초쯤 걸려요" : action === "trash" ? "버리는 중…" : "되돌리는 중…");
+    pollUntil(id, to);
+  } catch (e) { delete pending[id]; savePending(); render(); toast(e.message); }
+}
+
+async function pollUntil(id, to, tries = 14) {
+  for (let i = 0; i < tries; i++) {
+    await new Promise(r => setTimeout(r, 8000));
+    await load();
+    const it = items.find(x => x.id === id);
+    if (it && it.status === to) { toast(to === "added" ? "노션 지원 이력에 추가됐어요" : "완료"); return; }
+  }
+  toast("아직 반영이 안 됐어요. 잠시 후 새로고침해 보세요.");
+}
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.dataset.act) act(b.dataset.id, b.dataset.act);
+  else if (b.dataset.status) { statusFilter = b.dataset.status; try { localStorage.setItem(LS.status, statusFilter); } catch (x) {} render(); }
+  else if (b.dataset.cat) { catFilter = b.dataset.cat; try { localStorage.setItem(LS.cat, catFilter); } catch (x) {} render(); }
+});
+$("#refresh").onclick = load;
+$("#settings").onclick = () => { if (confirm("저장된 토큰을 지우고 다시 설정할까요?")) { try { localStorage.removeItem(LS.token); } catch (e) {} renderSetup(); } };
+// 오래된 대기 표시(10분 넘음)는 지운다
+for (const k of Object.keys(pending)) if (Date.now() - pending[k].at > 600e3) delete pending[k];
+load();
+</script>
+</body>
+</html>
