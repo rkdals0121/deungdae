@@ -4,107 +4,210 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>등대 수신함</title>
-<meta name="description" content="공고감시 봇이 모은 새 공고를 확인하고 노션 지원 이력에 추가하거나 버린다.">
+<meta name="description" content="공고감시 봇이 모은 새 공고를 마감 순으로 훑고, 남길 것은 노션 지원 이력에 넣고 나머지는 버린다.">
+<meta name="theme-color" content="#0b1c2c">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔦</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&family=Gowun+Batang:wght@700&display=swap" rel="stylesheet">
 <style>
+  /* 밤바다와 등불. 강조색은 호박색 하나뿐이다. */
   :root {
-    --bg: #f6f7f9; --card: #ffffff; --text: #1a1d22; --muted: #6b7280; --line: #e5e7eb;
-    --accent: #2b6cb0; --accent-ink: #ffffff; --danger: #c0392b; --ok: #1e7f4f; --warn: #b45309;
-    --chip: #eef2f7; --chip-on: #1a1d22; --chip-on-ink: #ffffff;
+    --sea: #eef3f6;        /* 바탕 */
+    --sea-2: #e3eaf0;      /* 살짝 가라앉은 바탕 (헤더, 입력) */
+    --rock: #ffffff;       /* 카드 */
+    --rock-line: #d6dee6;  /* 카드 테두리 */
+    --ink: #10202f;        /* 본문 글자 */
+    --ink-2: #4c5c6b;      /* 보조 글자 */
+    --ink-3: #8593a1;      /* 흐린 글자 */
+    --lamp: #e0a021;       /* 등불: 주요 동작, 마감 임박 */
+    --lamp-ink: #1a1400;
+    --lamp-soft: #fff1cf;
+    --kelp: #23805f;       /* 남김(추가됨) */
+    --rust: #c9472b;       /* 버림·경고 */
+    --focus: #1f6fd1;
+    --beam-start: #ffd166; --beam-end: #e0a021;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #0f1216; --card: #171b21; --text: #e6e8eb; --muted: #9aa3ad; --line: #2a3038;
-      --accent: #5b9bff; --accent-ink: #0b1220; --danger: #ff6b5e; --ok: #4cc38a; --warn: #f5b355;
-      --chip: #222831; --chip-on: #e6e8eb; --chip-on-ink: #0f1216;
+      --sea: #0b1c2c; --sea-2: #0f2437; --rock: #142a3d; --rock-line: #22405a;
+      --ink: #e9f0f5; --ink-2: #a9bacb; --ink-3: #6f8497;
+      --lamp: #ffc857; --lamp-ink: #1a1400; --lamp-soft: #2b2a14;
+      --kelp: #4cc99a; --rust: #ff7a5c; --focus: #7ab8ff;
+      --beam-start: #fff0b3; --beam-end: #ffc857;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #0f1216; --card: #171b21; --text: #e6e8eb; --muted: #9aa3ad; --line: #2a3038;
-    --accent: #5b9bff; --accent-ink: #0b1220; --danger: #ff6b5e; --ok: #4cc38a; --warn: #f5b355;
-    --chip: #222831; --chip-on: #e6e8eb; --chip-on-ink: #0f1216;
+    --sea: #0b1c2c; --sea-2: #0f2437; --rock: #142a3d; --rock-line: #22405a;
+    --ink: #e9f0f5; --ink-2: #a9bacb; --ink-3: #6f8497;
+    --lamp: #ffc857; --lamp-ink: #1a1400; --lamp-soft: #2b2a14;
+    --kelp: #4cc99a; --rust: #ff7a5c; --focus: #7ab8ff;
+    --beam-start: #fff0b3; --beam-end: #ffc857;
   }
+
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 -apple-system, "Pretendard", "Noto Sans KR", system-ui, sans-serif; }
-  header { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); padding: 10px 16px; display: flex; align-items: center; gap: 10px; }
-  header h1 { font-size: 18px; margin: 0; flex: 1; }
-  header h1 small { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: 6px; }
-  button { font: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 8px; padding: 6px 10px; }
-  button.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
-  button.danger { color: var(--danger); }
-  button:disabled { opacity: .5; cursor: default; }
-  .bar { display: flex; gap: 8px; flex-wrap: wrap; padding: 10px 16px 0; }
-  .chip { border-radius: 999px; padding: 4px 12px; background: var(--chip); border: none; font-size: 13px; }
-  .chip.on { background: var(--chip-on); color: var(--chip-on-ink); }
-  main { padding: 12px 16px 60px; max-width: 760px; margin: 0 auto; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin: 0 0 12px; }
-  .card.done { opacity: .75; }
-  .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
-  .badge { padding: 2px 8px; border-radius: 6px; background: var(--chip); color: var(--text); }
-  .badge.d { font-weight: 600; }
-  .badge.d.soon { background: var(--danger); color: #fff; }
-  .badge.d.over { text-decoration: line-through; }
-  .badge.st-added { background: var(--ok); color: #fff; }
-  .badge.st-trashed { background: var(--muted); color: #fff; }
-  .badge.st-pending { background: var(--warn); color: #fff; }
-  h2 { font-size: 16px; margin: 6px 0 8px; line-height: 1.35; }
-  h2 a { color: inherit; text-decoration: none; }
-  h2 a:hover { text-decoration: underline; }
-  dl { margin: 0; display: grid; grid-template-columns: 44px 1fr; gap: 4px 10px; font-size: 14px; }
-  dt { color: var(--muted); }
-  dd { margin: 0; }
-  .excerpt { color: var(--muted); font-size: 13px; margin: 6px 0 0; }
-  .actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
-  .actions .sp { flex: 1; }
-  .empty { text-align: center; color: var(--muted); padding: 40px 0; }
-  .setup { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin: 16px auto; max-width: 560px; }
-  .setup input { width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); }
-  .setup ol { padding-left: 18px; color: var(--muted); font-size: 13px; }
-  .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
-  .toast.show { opacity: 1; }
-  .notion { font-size: 12px; margin-left: 6px; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--sea); color: var(--ink); font: 15px/1.55 "IBM Plex Sans KR", -apple-system, "Pretendard", system-ui, sans-serif; }
+  a { color: inherit; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 600; letter-spacing: .01em; }
+
+  /* ── 머리: 등대 이름표 + 탭 ── */
+  header { position: sticky; top: 0; z-index: 5; background: var(--sea); padding: 14px 16px 0; }
+  .brand { display: flex; align-items: baseline; gap: 10px; }
+  .brand h1 { margin: 0; font: 700 26px/1 "Gowun Batang", serif; letter-spacing: -.01em; }
+  .brand .lamp { width: 10px; height: 10px; border-radius: 50%; background: var(--lamp); box-shadow: 0 0 0 4px var(--lamp-soft), 0 0 18px 2px var(--lamp); align-self: center; }
+  .brand .sub { color: var(--ink-3); font-size: 13px; margin-left: auto; }
+  .iconbtn { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--rock-line); background: var(--rock); display: grid; place-items: center; font-size: 16px; }
+  .tabs { display: flex; gap: 4px; margin-top: 12px; border-bottom: 1px solid var(--rock-line); }
+  .tab { flex: 1; padding: 10px 4px 12px; border: 0; background: none; color: var(--ink-3); font-weight: 500; position: relative; }
+  .tab b { font-weight: 600; color: var(--ink); }
+  .tab .n { display: inline-block; min-width: 20px; margin-left: 4px; padding: 0 6px; border-radius: 999px; background: var(--sea-2); font-size: 12px; color: var(--ink-2); }
+  .tab.on { color: var(--ink); }
+  .tab.on::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; background: var(--lamp); border-radius: 2px; }
+
+  /* ── 도구줄: 검색·정렬·분류 ── */
+  .tools { padding: 10px 16px 0; display: flex; gap: 8px; }
+  .search { flex: 1; display: flex; align-items: center; gap: 8px; background: var(--sea-2); border: 1px solid transparent; border-radius: 10px; padding: 0 12px; height: 40px; }
+  .search:focus-within { border-color: var(--rock-line); background: var(--rock); }
+  .search input { flex: 1; min-width: 0; border: 0; background: none; color: var(--ink); font: inherit; outline: none; }
+  .search input::placeholder { color: var(--ink-3); }
+  .sort { height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--rock-line); background: var(--rock); color: var(--ink-2); font-size: 13px; white-space: nowrap; }
+  .chips { display: flex; gap: 6px; padding: 10px 16px 4px; overflow-x: auto; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { flex: 0 0 auto; height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--rock-line); background: var(--rock); color: var(--ink-2); font-size: 13px; }
+  .chip.on { background: var(--ink); color: var(--sea); border-color: var(--ink); }
+
+  /* ── 본문 ── */
+  main { padding: 6px 16px 96px; max-width: 720px; margin: 0 auto; }
+  .section { margin: 18px 0 8px; display: flex; align-items: baseline; gap: 10px; }
+  .section h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--ink-2); letter-spacing: .02em; }
+  .section .cnt { color: var(--ink-3); font-size: 12px; }
+  .section.urgent h3 { color: var(--lamp); }
+
+  .card { position: relative; background: var(--rock); border: 1px solid var(--rock-line); border-radius: 14px; padding: 14px 16px 12px; margin: 0 0 10px; overflow: hidden; animation: rise .25s ease both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .card { animation: none; } }
+  /* 시그니처: 카드 위를 가로지르는 빛줄기. 발견일→마감일 사이에서 지금이 어디쯤인지. */
+  .beam { position: absolute; left: 0; top: 0; height: 3px; width: var(--w, 0%); background: linear-gradient(90deg, var(--beam-start), var(--beam-end)); border-radius: 0 3px 3px 0; }
+  .beam.over { background: var(--ink-3); }
+  .card.done { opacity: .72; }
+
+  .meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-3); }
+  .cat { color: var(--ink-2); font-weight: 500; }
+  .meta .src { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .dday { margin-left: auto; font-size: 12px; padding: 3px 8px; border-radius: 6px; background: var(--sea-2); color: var(--ink-2); white-space: nowrap; }
+  .dday.soon { background: var(--lamp); color: var(--lamp-ink); }
+  .dday.over { text-decoration: line-through; }
+  .dday.none { background: transparent; border: 1px dashed var(--rock-line); }
+  h2 { margin: 8px 0 6px; font-size: 16.5px; line-height: 1.4; font-weight: 600; letter-spacing: -.005em; }
+  h2 a { text-decoration: none; }
+  h2 a:hover { text-decoration: underline; text-decoration-color: var(--lamp); text-underline-offset: 3px; }
+  .state { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; margin: 2px 0 6px; }
+  .state.added { color: var(--kelp); }
+  .state.trashed { color: var(--ink-3); }
+  .state.pending { color: var(--lamp); }
+  .state a { font-size: 12px; }
+
+  dl { margin: 4px 0 0; display: grid; grid-template-columns: 38px 1fr; gap: 3px 10px; font-size: 14px; }
+  dt { color: var(--ink-3); font-size: 12.5px; padding-top: 2px; }
+  dd { margin: 0; color: var(--ink); }
+  dd.clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .card.open dd.clamp { display: block; }
+  .card:not(.open) .more-row { display: none; }
+  .excerpt { color: var(--ink-2); font-size: 13.5px; margin: 4px 0 0; }
+  .card:not(.open) .excerpt { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .expand { margin: 6px 0 0; padding: 4px 0; border: 0; background: none; color: var(--ink-3); font-size: 12.5px; }
+  .expand::after { content: " ▾"; }
+  .card.open .expand::after { content: " ▴"; }
+
+  .actions { display: flex; gap: 8px; margin-top: 12px; }
+  .actions button, .actions a { height: 44px; padding: 0 14px; border-radius: 11px; border: 1px solid var(--rock-line); background: var(--rock); display: inline-flex; align-items: center; justify-content: center; text-decoration: none; font-weight: 500; }
+  .actions .keep { flex: 1; background: var(--lamp); color: var(--lamp-ink); border-color: transparent; font-weight: 600; }
+  .actions .drop { color: var(--rust); }
+  .actions .ghost { color: var(--ink-2); }
+  .actions button:disabled { opacity: .5; cursor: default; }
+
+  .empty { text-align: center; color: var(--ink-3); padding: 56px 12px; }
+  .empty .glyph { font-size: 34px; margin-bottom: 8px; }
+  .empty b { color: var(--ink-2); font-weight: 500; }
+
+  .setup { background: var(--rock); border: 1px solid var(--rock-line); border-radius: 14px; padding: 18px; margin: 20px auto; max-width: 560px; }
+  .setup h2 { margin: 0 0 6px; }
+  .setup p { color: var(--ink-2); margin: 0 0 10px; }
+  .setup ol { padding-left: 18px; color: var(--ink-2); font-size: 13.5px; margin: 0 0 12px; }
+  .setup input { width: 100%; height: 44px; font: inherit; padding: 0 12px; border: 1px solid var(--rock-line); border-radius: 10px; background: var(--sea-2); color: var(--ink); }
+  .setup .actions { margin-top: 10px; }
+
+  .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%) translateY(8px); background: var(--ink); color: var(--sea); padding: 10px 14px; border-radius: 12px; font-size: 13.5px; opacity: 0; transition: opacity .18s, transform .18s; display: flex; gap: 12px; align-items: center; max-width: calc(100% - 32px); box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+  .toast.show { opacity: 1; transform: translateX(-50%); }
+  .toast button { border: 0; background: none; color: var(--lamp); font-weight: 600; padding: 0; }
 </style>
 </head>
 <body>
 <header>
-  <h1>🔦 등대 <small id="count"></small></h1>
-  <button id="refresh" title="새로고침">↻</button>
-  <button id="settings" title="설정">⚙</button>
+  <div class="brand">
+    <span class="lamp" aria-hidden="true"></span>
+    <h1>등대</h1>
+    <span class="sub" id="sub"></span>
+    <button class="iconbtn" id="refresh" title="새로고침" aria-label="새로고침">↻</button>
+    <button class="iconbtn" id="settings" title="토큰 다시 설정" aria-label="설정">⚙</button>
+  </div>
+  <nav class="tabs" id="tabs" aria-label="상태">
+    <button class="tab on" data-status="new"><b>새로움</b><span class="n" id="n-new">0</span></button>
+    <button class="tab" data-status="added">남김<span class="n" id="n-added">0</span></button>
+    <button class="tab" data-status="trashed">버림<span class="n" id="n-trashed">0</span></button>
+  </nav>
 </header>
 
-<div class="bar" id="statusBar">
-  <button class="chip on" data-status="new">새로움</button>
-  <button class="chip" data-status="added">추가함</button>
-  <button class="chip" data-status="trashed">버림</button>
+<div class="tools">
+  <label class="search"><span aria-hidden="true">⌕</span><input id="q" type="search" placeholder="제목·내용 검색" autocomplete="off"></label>
+  <button class="sort" id="sort" title="정렬 바꾸기"></button>
 </div>
-<div class="bar" id="catBar"></div>
+<div class="chips" id="cats"></div>
 
 <main id="main"></main>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
 // 파일 세 개를 역할별로 나눠 쓴다. inbox(봇이 씀) / decisions(이 화면이 씀) / notion_links(봇이 씀).
 const OWNER = "rkdals0121", REPO = "notice-watcher";
 const FILES = { inbox: "state/inbox.json", decisions: "state/decisions.json", links: "state/notion_links.json" };
 const API = `https://api.github.com/repos/${OWNER}/${REPO}`;
-const LS = { token: "deungdae.token", pending: "deungdae.pending", status: "deungdae.status", cat: "deungdae.cat" };
+const LS = { token: "deungdae.token", pending: "deungdae.pending", status: "deungdae.status", cat: "deungdae.cat", sort: "deungdae.sort" };
 
-let items = [], decisions = {}, links = {}, statusFilter = "new", catFilter = "전체", pending = {};
-try { statusFilter = localStorage.getItem(LS.status) || "new"; catFilter = localStorage.getItem(LS.cat) || "전체";
-      pending = JSON.parse(localStorage.getItem(LS.pending) || "{}"); } catch (e) {}
+let items = [], decisions = {}, links = {}, pending = {};
+let statusFilter = "new", catFilter = "전체", sortMode = "deadline", query = "";
+const open = new Set();
+try {
+  statusFilter = localStorage.getItem(LS.status) || "new";
+  catFilter = localStorage.getItem(LS.cat) || "전체";
+  sortMode = localStorage.getItem(LS.sort) || "deadline";
+  pending = JSON.parse(localStorage.getItem(LS.pending) || "{}");
+} catch (e) {}
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 2200); }
+const remember = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
 function token() { try { return localStorage.getItem(LS.token) || ""; } catch (e) { return ""; } }
-function savePending() { try { localStorage.setItem(LS.pending, JSON.stringify(pending)); } catch (e) {} }
+function savePending() { remember(LS.pending, JSON.stringify(pending)); }
 function today() { return new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10); }
-function dday(deadline) {
-  if (!deadline) return null;
-  return Math.round((new Date(deadline + "T00:00:00+09:00") - new Date(today() + "T00:00:00+09:00")) / 864e5);
-}
+const days = (a, b) => Math.round((new Date(b + "T00:00:00+09:00") - new Date(a + "T00:00:00+09:00")) / 864e5);
+function dday(deadline) { return deadline ? days(today(), deadline) : null; }
 const b64enc = s => btoa(String.fromCharCode(...new TextEncoder().encode(s)));
 const b64dec = s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\n/g, "")), c => c.charCodeAt(0)));
+
+let toastTimer;
+function toast(msg, action) {
+  const t = $("#toast");
+  t.innerHTML = esc(msg) + (action ? `<button id="toastAct">${esc(action.label)}</button>` : "");
+  if (action) $("#toastAct").onclick = () => { hideToast(); action.fn(); };
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(hideToast, action ? 6000 : 2200);
+}
+function hideToast() { $("#toast").classList.remove("show"); }
 
 async function gh(path, opts = {}) {
   const r = await fetch(API + path, { ...opts, headers: { Authorization: "Bearer " + token(), Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", ...(opts.headers || {}) } });
@@ -131,7 +234,7 @@ async function updateJson(path, mutate, message) {
     let detail = ""; try { detail = (await put.json()).message || ""; } catch (e) {}
     throw new Error(`저장 실패 ${put.status}${detail ? ": " + detail : ""}`);
   }
-  throw new Error("저장 충돌이 계속됨. 잠시 후 다시");
+  throw new Error("저장이 계속 충돌해요. 잠시 후 다시 눌러주세요");
 }
 
 function statusOf(it) { const d = decisions[it.id]; return d ? d.status : (it.status || "new"); }
@@ -153,63 +256,114 @@ async function load() {
 function renderSetup() {
   $("#main").innerHTML = `
   <div class="setup">
-    <h2>처음 설정</h2>
-    <p>이 화면은 GitHub 비공개 저장소의 수신함 파일을 읽고 씁니다. 개인 액세스 토큰을 한 번 넣으면 이 기기에 저장됩니다.</p>
+    <h2>등대에 불 켜기</h2>
+    <p>이 화면은 GitHub 비공개 저장소의 수신함을 읽고 씁니다. 개인 토큰을 한 번 넣으면 이 기기에만 저장됩니다.</p>
     <ol>
-      <li>github.com → 우상단 프로필 → Settings → Developer settings → Personal access tokens → <b>Fine-grained tokens</b> → Generate new token</li>
+      <li>github.com → 프로필 → Settings → Developer settings → Personal access tokens → <b>Fine-grained tokens</b> → Generate new token</li>
       <li>Repository access: <b>Only select repositories</b> → <code>notice-watcher</code></li>
-      <li>Permissions → Repository permissions → <b>Contents: Read and write</b> (Metadata는 자동으로 Read)</li>
-      <li>Expiration은 90일 (더 멀리 잡으면 GitHub이 거부할 수 있음). 만들어진 <code>github_pat_…</code> 를 아래에 붙여넣기</li>
+      <li>Permissions → Repository permissions → <b>Contents: Read and write</b></li>
+      <li>Expiration 90일. 만들어진 <code>github_pat_…</code> 를 아래에 붙여넣기</li>
     </ol>
     <input id="tokenInput" type="password" placeholder="github_pat_…" autocomplete="off">
-    <div class="actions"><span class="sp"></span><button class="primary" id="saveToken">저장하고 열기</button></div>
+    <div class="actions"><button class="keep" id="saveToken">저장하고 열기</button></div>
   </div>`;
-  $("#saveToken").onclick = () => { const v = $("#tokenInput").value.trim(); if (!v) return; try { localStorage.setItem(LS.token, v); } catch (e) {} load(); };
+  $("#saveToken").onclick = () => { const v = $("#tokenInput").value.trim(); if (!v) return; remember(LS.token, v); load(); };
+}
+
+function matchesQuery(it) {
+  if (!query) return true;
+  const s = it.summary || {};
+  const hay = [it.title, it.source, s.대상, s.활동, s.자격, s.혜택, it.excerpt].join(" ").toLowerCase();
+  return query.split(/\s+/).every(w => hay.includes(w));
 }
 
 function visible() {
-  return items.filter(it => statusOf(it) === statusFilter && (catFilter === "전체" || it.category === catFilter))
-    .sort((a, b) => {
-      if (statusFilter !== "new") return (processedAt(b) || "").localeCompare(processedAt(a) || "");
-      return (a.deadline || "9999").localeCompare(b.deadline || "9999") || (b.first_seen || "").localeCompare(a.first_seen || "");
-    });
+  const list = items.filter(it => statusOf(it) === statusFilter && (catFilter === "전체" || it.category === catFilter) && matchesQuery(it));
+  if (statusFilter !== "new") return list.sort((a, b) => (processedAt(b) || "").localeCompare(processedAt(a) || ""));
+  if (sortMode === "recent") return list.sort((a, b) => (b.first_seen || "").localeCompare(a.first_seen || ""));
+  return list.sort((a, b) => (a.deadline || "9999").localeCompare(b.deadline || "9999") || (b.first_seen || "").localeCompare(a.first_seen || ""));
 }
 
+// 마감 구획. 순서 자체가 정보다: 위에 있을수록 급하다.
+function bucket(it) {
+  const d = dday(it.deadline);
+  if (d === null) return "마감 미확인";
+  if (d < 0) return "마감 지남";
+  if (d <= 7) return "이번 주 마감";
+  if (d <= 30) return "이번 달";
+  return "그 이후";
+}
+const BUCKETS = ["이번 주 마감", "이번 달", "그 이후", "마감 미확인", "마감 지남"];
+
 function render() {
-  const cats = ["전체", ...new Set(items.map(i => i.category))];
-  $("#catBar").innerHTML = cats.map(c => `<button class="chip ${c === catFilter ? "on" : ""}" data-cat="${esc(c)}">${esc(c)}</button>`).join("");
-  document.querySelectorAll("#statusBar .chip").forEach(b => b.classList.toggle("on", b.dataset.status === statusFilter));
-  $("#count").textContent = `새 공고 ${items.filter(i => statusOf(i) === "new").length}건`;
+  const counts = { new: 0, added: 0, trashed: 0 };
+  for (const it of items) counts[statusOf(it)] = (counts[statusOf(it)] || 0) + 1;
+  for (const k of Object.keys(counts)) $(`#n-${k}`).textContent = counts[k];
+  document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.status === statusFilter));
+  $("#sub").textContent = today().slice(5).replace("-", "/") + " 기준";
+  $("#sort").textContent = sortMode === "deadline" ? "마감 가까운 순" : "최근 발견 순";
+  $("#sort").style.visibility = statusFilter === "new" ? "visible" : "hidden";
+
+  const cats = ["전체", ...new Set(items.filter(i => statusOf(i) === statusFilter).map(i => i.category))];
+  if (!cats.includes(catFilter)) catFilter = "전체";
+  $("#cats").innerHTML = cats.map(c => `<button class="chip ${c === catFilter ? "on" : ""}" data-cat="${esc(c)}">${esc(c)}</button>`).join("");
+
   const list = visible();
-  $("#main").innerHTML = list.length ? list.map(card).join("") : `<div class="empty">여기엔 아직 아무것도 없어요.</div>`;
+  if (!list.length) {
+    const msg = query ? `<b>"${esc(query)}"</b>에 맞는 공고가 없어요` :
+      statusFilter === "new" ? "<b>새 공고를 다 봤어요.</b><br>다음 확인은 08시와 18시." :
+      statusFilter === "added" ? "아직 남긴 공고가 없어요.<br>새로움 탭에서 <b>남기기</b>를 누르면 여기 모여요." :
+      "버린 공고가 없어요.";
+    $("#main").innerHTML = `<div class="empty"><div class="glyph">🌊</div>${msg}</div>`;
+    return;
+  }
+  if (statusFilter !== "new" || sortMode !== "deadline") { $("#main").innerHTML = list.map(card).join(""); return; }
+  const groups = new Map();
+  for (const it of list) { const b = bucket(it); if (!groups.has(b)) groups.set(b, []); groups.get(b).push(it); }
+  $("#main").innerHTML = BUCKETS.filter(b => groups.has(b)).map(b =>
+    `<div class="section ${b === "이번 주 마감" ? "urgent" : ""}"><h3>${b}</h3><span class="cnt">${groups.get(b).length}</span></div>` +
+    groups.get(b).map(card).join("")).join("");
+}
+
+function beamWidth(it) {
+  if (!it.deadline || !it.first_seen) return null;
+  const total = Math.max(1, days(it.first_seen, it.deadline));
+  const gone = days(it.first_seen, today());
+  return Math.max(0, Math.min(100, Math.round(gone / total * 100)));
 }
 
 function card(it) {
-  const st = statusOf(it), d = dday(it.deadline), nurl = notionUrl(it);
-  const dBadge = it.deadline
-    ? `<span class="badge d ${d < 0 ? "over" : d <= 7 ? "soon" : ""}">${d < 0 ? "마감 지남" : d === 0 ? "오늘 마감" : `D-${d}`} · ${it.deadline.slice(5).replace("-", "/")}</span>`
-    : `<span class="badge">마감 미확인</span>`;
-  const stBadge = st === "added"
-      ? (nurl ? `<span class="badge st-added">노션에 추가됨</span><a class="notion" href="${esc(nurl)}" target="_blank">열기 ↗</a>`
-              : `<span class="badge st-pending">노션에 넣는 중…</span>`)
-    : st === "trashed" ? `<span class="badge st-trashed">버림</span>` : "";
-  const s = it.summary || {};
-  const rows = ["대상", "활동", "자격", "혜택"].filter(k => s[k]).map(k => `<dt>${k}</dt><dd>${esc(s[k])}</dd>`).join("");
-  const body = rows ? `<dl>${rows}</dl>` : (it.excerpt ? `<p class="excerpt">${esc(it.excerpt)}</p>` : `<p class="excerpt">본문을 읽지 못했어요. 원문을 확인하세요.</p>`);
+  const st = statusOf(it), d = dday(it.deadline), nurl = notionUrl(it), s = it.summary || {}, isOpen = open.has(it.id);
+  const w = beamWidth(it);
+  const beam = w === null ? "" : `<div class="beam ${d < 0 ? "over" : ""}" style="--w:${d < 0 ? 100 : w}%"></div>`;
+  const ddayEl = it.deadline
+    ? `<span class="dday mono ${d < 0 ? "over" : d <= 7 ? "soon" : ""}">${d < 0 ? "지남" : d === 0 ? "D-DAY" : `D-${d}`} · ${it.deadline.slice(5).replace("-", ".")}</span>`
+    : `<span class="dday none">마감 미확인</span>`;
+  const state = st === "added"
+      ? (nurl ? `<div class="state added">✓ 노션 지원 이력에 있음 <a href="${esc(nurl)}" target="_blank" rel="noopener">열기 ↗</a></div>`
+              : `<div class="state pending">노션에 넣는 중…</div>`)
+    : st === "trashed" ? `<div class="state trashed">버림 · ${esc(processedAt(it) || "")}</div>` : "";
+  const first = ["대상", "혜택"].filter(k => s[k]), rest = ["활동", "자격"].filter(k => s[k]);
+  const rows = [...first.map(k => `<dt>${k}</dt><dd class="clamp">${esc(s[k])}</dd>`),
+                ...rest.map(k => `<dt class="more-row">${k}</dt><dd class="more-row">${esc(s[k])}</dd>`)].join("");
+  const hasMore = rest.length > 0 || first.some(k => s[k].length > 70) || (!rows && it.excerpt && it.excerpt.length > 120);
+  const body = rows ? `<dl>${rows}</dl>` : (it.excerpt ? `<p class="excerpt">${esc(it.excerpt)}</p>` : `<p class="excerpt">본문을 읽지 못했어요. 원문에서 확인하세요.</p>`);
+  const more = hasMore ? `<button class="expand" data-open="${it.id}">${isOpen ? "접기" : "자세히"}</button>` : "";
   const actions = st === "new"
-    ? `<button class="danger" data-act="trash" data-id="${it.id}">휴지통</button><span class="sp"></span><a href="${esc(it.url)}" target="_blank"><button>원문</button></a><button class="primary" data-act="add" data-id="${it.id}">노션에 추가</button>`
-    : `<a href="${esc(it.url)}" target="_blank"><button>원문</button></a><span class="sp"></span><button data-act="restore" data-id="${it.id}">되돌리기</button>`;
-  return `<article class="card ${st !== "new" ? "done" : ""}">
-    <div class="top"><span class="badge">${esc(it.category)}</span>${dBadge}<span>${esc(it.source)}</span><span>· 발견 ${esc((it.first_seen || "").slice(5).replace("-", "/"))}</span>${stBadge}</div>
-    <h2><a href="${esc(it.url)}" target="_blank">${esc(it.title)}</a></h2>
-    ${body}
+    ? `<button class="drop" data-act="trash" data-id="${it.id}">버리기</button><a class="ghost" href="${esc(it.url)}" target="_blank" rel="noopener">원문</a><button class="keep" data-act="add" data-id="${it.id}">남기기 → 노션</button>`
+    : `<a class="ghost" href="${esc(it.url)}" target="_blank" rel="noopener">원문</a><span style="flex:1"></span><button class="ghost" data-act="restore" data-id="${it.id}">새로움으로 되돌리기</button>`;
+  return `<article class="card ${st !== "new" ? "done" : ""} ${isOpen ? "open" : ""}" data-card="${it.id}">
+    ${beam}
+    <div class="meta"><span class="cat">${esc(it.category)}</span><span>·</span><span class="src">${esc(it.source)}</span>${ddayEl}</div>
+    <h2><a href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.title)}</a></h2>
+    ${state}${body}${more}
     <div class="actions">${actions}</div>
   </article>`;
 }
 
 let busy = false;
-async function act(id, action) {
-  if (busy) { toast("잠깐만요, 앞 작업 처리 중"); return; }
+async function act(id, action, silent) {
+  if (busy) { toast("앞 작업이 끝나면 눌러주세요"); return; }
   busy = true;
   const to = { add: "added", trash: "trashed", restore: "new" }[action];
   const prev = decisions[id];
@@ -221,9 +375,11 @@ async function act(id, action) {
       pending[id] = { at: Date.now() }; savePending();
       const r = await gh("/dispatches", { method: "POST", body: JSON.stringify({ event_type: "inbox_action", client_payload: { id, action: "add" } }) });
       if (r.status !== 204) { let m = ""; try { m = (await r.json()).message || ""; } catch (e) {} throw new Error(`노션 요청 실패 ${r.status}${m ? ": " + m : ""}`); }
-      toast("추가됨. 노션 등록은 30초쯤 뒤에 끝나요");
+      toast("남겼어요. 노션 등록은 30초쯤 걸려요", { label: "되돌리기", fn: () => act(id, "restore", true) });
       pollLinks(id);
-    } else toast(action === "trash" ? "버렸어요" : "되돌렸어요");
+    } else if (action === "trash") {
+      toast("버렸어요", { label: "되돌리기", fn: () => act(id, "restore", true) });
+    } else if (!silent) toast("새로움으로 되돌렸어요");
   } catch (e) {
     if (prev) decisions[id] = prev; else delete decisions[id];
     render(); toast(e.message);
@@ -235,7 +391,7 @@ async function pollLinks(id, tries = 12) {
   for (let i = 0; i < tries; i++) {
     await new Promise(r => setTimeout(r, 8000));
     try { links = await readJson(FILES.links, {}); } catch (e) { continue; }
-    if (links[id]) { delete pending[id]; savePending(); render(); toast("노션 지원 이력에 등록됐어요"); return; }
+    if (links[id]) { delete pending[id]; savePending(); render(); toast("노션 지원 이력에 들어갔어요"); return; }
   }
 }
 
@@ -243,9 +399,12 @@ document.addEventListener("click", e => {
   const b = e.target.closest("button");
   if (!b) return;
   if (b.dataset.act) act(b.dataset.id, b.dataset.act);
-  else if (b.dataset.status) { statusFilter = b.dataset.status; try { localStorage.setItem(LS.status, statusFilter); } catch (x) {} render(); }
-  else if (b.dataset.cat) { catFilter = b.dataset.cat; try { localStorage.setItem(LS.cat, catFilter); } catch (x) {} render(); }
+  else if (b.dataset.open) { const id = b.dataset.open; open.has(id) ? open.delete(id) : open.add(id); render(); }
+  else if (b.dataset.status) { statusFilter = b.dataset.status; remember(LS.status, statusFilter); render(); }
+  else if (b.dataset.cat) { catFilter = b.dataset.cat; remember(LS.cat, catFilter); render(); }
 });
+$("#q").addEventListener("input", e => { query = e.target.value.trim().toLowerCase(); render(); });
+$("#sort").onclick = () => { sortMode = sortMode === "deadline" ? "recent" : "deadline"; remember(LS.sort, sortMode); render(); };
 $("#refresh").onclick = load;
 $("#settings").onclick = () => { if (confirm("저장된 토큰을 지우고 다시 설정할까요?")) { try { localStorage.removeItem(LS.token); } catch (e) {} renderSetup(); } };
 load();
