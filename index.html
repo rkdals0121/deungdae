@@ -140,6 +140,30 @@
   .setup input { width: 100%; height: 44px; font: inherit; padding: 0 12px; border: 1px solid var(--rock-line); border-radius: 10px; background: var(--sea-2); color: var(--ink); }
   .setup .actions { margin-top: 10px; }
 
+  /* ── 설정 ── */
+  dialog { border: 0; padding: 0; background: transparent; max-width: none; width: 100%; height: 100%; max-height: none; margin: 0; }
+  dialog::backdrop { background: rgba(4, 12, 22, .55); }
+  .sheet { background: var(--sea); color: var(--ink); width: min(720px, 100%); margin: 0 auto; min-height: 100%; padding: 18px 16px 40px; }
+  .sheet .head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .sheet .head h2 { margin: 0; font: 700 22px/1 "Gowun Batang", serif; flex: 1; }
+  .sheet h3 { font-size: 13px; font-weight: 600; color: var(--ink-2); letter-spacing: .02em; margin: 22px 0 8px; }
+  .sheet p { color: var(--ink-2); margin: 0 0 8px; font-size: 14px; }
+  .box { background: var(--rock); border: 1px solid var(--rock-line); border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; }
+  .box .t { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+  .box .t .cat { font-size: 12px; color: var(--ink-3); font-weight: 400; }
+  .box .t .when { margin-left: auto; font-size: 12px; color: var(--ink-3); }
+  .box summary { cursor: pointer; list-style: none; }
+  .box summary::-webkit-details-marker { display: none; }
+  .box details[open] summary .t::after { content: ""; }
+  .words { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+  .word { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--sea-2); color: var(--ink-2); }
+  .word.no { text-decoration: line-through; color: var(--ink-3); }
+  .words .lbl { font-size: 12px; color: var(--ink-3); width: 100%; margin-top: 4px; }
+  .catdef { display: grid; grid-template-columns: 64px 1fr; gap: 6px 10px; font-size: 14px; }
+  .catdef b { font-weight: 600; }
+  .catdef span { color: var(--ink-2); }
+  .sheet .actions button { flex: 1; }
+
   .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%) translateY(8px); background: var(--ink); color: var(--sea); padding: 10px 14px; border-radius: 12px; font-size: 13.5px; opacity: 0; transition: opacity .18s, transform .18s; display: flex; gap: 12px; align-items: center; max-width: calc(100% - 32px); box-shadow: 0 8px 24px rgba(0,0,0,.25); }
   .toast.show { opacity: 1; transform: translateX(-50%); }
   .toast button { border: 0; background: none; color: var(--lamp); font-weight: 600; padding: 0; }
@@ -168,6 +192,7 @@
 <div class="chips" id="cats"></div>
 
 <main id="main"></main>
+<dialog id="settingsDlg"><div class="sheet" id="sheet"></div></dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -406,7 +431,46 @@ document.addEventListener("click", e => {
 $("#q").addEventListener("input", e => { query = e.target.value.trim().toLowerCase(); render(); });
 $("#sort").onclick = () => { sortMode = sortMode === "deadline" ? "recent" : "deadline"; remember(LS.sort, sortMode); render(); };
 $("#refresh").onclick = load;
-$("#settings").onclick = () => { if (confirm("저장된 토큰을 지우고 다시 설정할까요?")) { try { localStorage.removeItem(LS.token); } catch (e) {} renderSetup(); } };
+// ── 설정: 어떤 게시판을 어떤 기준으로 보는지 ──
+const CATDEF = [
+  ["장학", "장학금·장학생 선발. 서울·인천·수도권·전국 대상만, 지방 한정과 대학원은 제외"],
+  ["공모전", "논문·정책 제안·아이디어 공모. 사진·영상·디자인 같은 창작물 전용은 제외"],
+  ["대외활동", "서포터즈·기자단·아카데미·해외봉사·청년정책 참여단. 대기업·정부부처·공공기관 주최"],
+  ["공지", "학교·기관 게시판에서 위 기준에 걸린 글. 분류를 자동으로 못 나눈 것"],
+];
+async function openSettings() {
+  const dlg = $("#settingsDlg"), sheet = $("#sheet");
+  sheet.innerHTML = `<div class="head"><h2>설정</h2><button class="iconbtn" id="closeDlg" aria-label="닫기">✕</button></div><p>불러오는 중…</p>`;
+  dlg.showModal();
+  $("#closeDlg").onclick = () => dlg.close();
+  let cfg = null;
+  try { cfg = await readJson("state/config.json", null); } catch (e) {}
+  const srcRow = s => `
+    <div class="box"><details><summary><div class="t"><span>${esc(s.name)}</span><span class="cat">${esc(s.category)} · ${s.notify === "digest" ? "월요일 묶음" : "즉시 메일"}</span><span class="when">기준 보기</span></div></summary>
+      <div class="words"><span class="lbl">통과 (제목에 하나라도 있으면)</span>${s.keywords.length ? s.keywords.map(w => `<span class="word">${esc(w)}</span>`).join("") : `<span class="word">전부</span>`}</div>
+      <div class="words"><span class="lbl">제외 (있으면 버림)</span>${s.exclude.map(w => `<span class="word no">${esc(w)}</span>`).join("")}</div>
+      <div class="words"><a class="word" href="${esc(s.url)}" target="_blank" rel="noopener">게시판 열기 ↗</a></div>
+    </details></div>`;
+  const byCat = {};
+  for (const s of (cfg?.sources || [])) (byCat[s.category] = byCat[s.category] || []).push(s);
+  sheet.innerHTML = `
+    <div class="head"><h2>설정</h2><button class="iconbtn" id="closeDlg" aria-label="닫기">✕</button></div>
+    <p>등대는 아래 게시판을 매일 08시·18시에 확인하고, 제목이 기준에 맞는 새 글만 가져옵니다. 기준은 카톡 브리핑 루틴(월·화·수·목·금)의 조건을 옮긴 것입니다.${cfg ? ` 마지막 확인 ${esc(cfg.checked_at)}.` : ""}</p>
+    <h3>분류가 뜻하는 것</h3>
+    <div class="box catdef">${CATDEF.map(([c, d]) => `<b>${c}</b><span>${d}</span>`).join("")}</div>
+    <h3>감시하는 게시판 ${cfg ? cfg.sources.length + "개" : ""}</h3>
+    ${cfg ? Object.keys(byCat).map(c => `<p style="margin:10px 0 4px"><b>${esc(c)}</b> ${byCat[c].length}</p>` + byCat[c].map(srcRow).join("")).join("")
+          : `<p>기준 파일(state/config.json)이 아직 없어요. 봇이 다음에 돌 때 생깁니다.</p>`}
+    <h3>기준을 바꾸려면</h3>
+    <p>저장소의 <code>watchlist.yml</code> 한 파일입니다. 게시판 추가, 통과·제외 단어 수정 모두 거기서. 바꾸고 싶은 건 Claude에게 제목만 말하면 됩니다.</p>
+    <div class="words"><a class="word" href="https://github.com/${OWNER}/${REPO}/blob/main/watchlist.yml" target="_blank" rel="noopener">watchlist.yml 열기 ↗</a><a class="word" href="https://github.com/${OWNER}/${REPO}/actions" target="_blank" rel="noopener">실행 기록 ↗</a></div>
+    <h3>이 기기</h3>
+    <div class="actions"><button class="ghost" id="resetToken">토큰 지우고 다시 설정</button></div>`;
+  $("#closeDlg").onclick = () => dlg.close();
+  $("#resetToken").onclick = () => { if (confirm("이 기기에 저장된 GitHub 토큰을 지웁니다. 계속할까요?")) { try { localStorage.removeItem(LS.token); } catch (e) {} dlg.close(); renderSetup(); } };
+}
+$("#settings").onclick = openSettings;
+$("#settingsDlg").addEventListener("click", e => { if (e.target === e.currentTarget) e.currentTarget.close(); });
 load();
 </script>
 </body>
