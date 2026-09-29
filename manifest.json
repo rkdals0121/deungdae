@@ -1,0 +1,13 @@
+{
+  "name": "등대 수신함",
+  "short_name": "등대",
+  "description": "새 공고를 마감 순으로 훑고 노션에 남기거나 버린다",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b1c2c",
+  "theme_color": "#0b1c2c",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
