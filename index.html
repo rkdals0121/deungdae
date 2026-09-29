@@ -393,7 +393,7 @@ function render() {
   const list = visible();
   if (!list.length) {
     const msg = query ? `<b>"${esc(query)}"</b>에 맞는 공고가 없어요` :
-      statusFilter === "new" ? "<b>새 공고를 다 봤어요.</b><br>다음 확인은 08시와 18시." :
+      statusFilter === "new" ? "<b>새 공고를 다 봤어요.</b><br>2시간마다 다시 확인해요." :
       statusFilter === "added" ? "아직 남긴 공고가 없어요.<br>새로움 탭에서 <b>남기기</b>를 누르면 여기 모여요." :
       "버린 공고가 없어요.";
     $("#main").innerHTML = `<div class="empty"><div class="glyph">🌊</div>${msg}</div>`;
@@ -614,7 +614,7 @@ async function openSettings() {
   for (const s of (cfg?.sources || [])) (byCat[s.category] = byCat[s.category] || []).push(s);
   sheet.innerHTML = `
     <div class="head"><h2>설정</h2><button class="iconbtn" id="closeDlg" aria-label="닫기">✕</button></div>
-    <p>등대는 아래 게시판을 매일 08시·18시에 확인하고, 제목이 기준에 맞는 새 글만 가져옵니다. 기준은 카톡 브리핑 루틴(월·화·수·목·금)의 조건을 옮긴 것입니다.${cfg ? ` 마지막 확인 ${esc(cfg.checked_at)}.` : ""}</p>
+    <p>등대는 아래 게시판을 2시간마다 확인하고, 제목이 기준에 맞는 새 글만 가져옵니다. 기준은 카톡 브리핑 루틴(월·화·수·목·금)의 조건을 옮긴 것입니다.${cfg ? ` 마지막 확인 ${esc(cfg.checked_at)}.` : ""}</p>
     <h3>분류가 뜻하는 것</h3>
     <div class="box catdef">${CATDEF.map(([c, d]) => `<b>${c}</b><span>${d}</span>`).join("")}</div>
     <h3>감시하는 게시판 ${cfg ? cfg.sources.length + "개" : ""}</h3>
