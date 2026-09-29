@@ -279,7 +279,7 @@ function hideToast() { $("#toast").classList.remove("show"); }
 
 async function gh(path, opts = {}) {
   const r = await fetch(API + path, { ...opts, headers: { Authorization: "Bearer " + token(), Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", ...(opts.headers || {}) } });
-  if (r.status === 401) throw new Error("토큰이 없거나 틀림");
+  if (r.status === 401) throw new Error("토큰이 만료됐거나 틀려요. ⚙에서 새 토큰을 넣어주세요");
   return r;
 }
 async function readJson(path, fallback) {
@@ -318,15 +318,15 @@ async function load() {
     for (const id of Object.keys(pending)) if (links[id] || Date.now() - pending[id].at > 600e3) delete pending[id];
     savePending();
     render();
-  } catch (e) { toast(e.message); if (String(e.message).includes("토큰")) renderSetup(); }
+  } catch (e) { toast(e.message); if (String(e.message).includes("토큰")) renderSetup(e.message); }
   $("#refresh").disabled = false;
 }
 
-function renderSetup() {
+function renderSetup(reason) {
   document.body.classList.add("nosetup");
   $("#main").innerHTML = `
   <div class="setup">
-    <h2>등대에 불 켜기</h2>
+    <h2>등대에 불 켜기</h2>${reason ? `<p style="color:var(--rust)">${esc(reason)}</p>` : ""}
     <p>이 화면은 GitHub 비공개 저장소의 수신함을 읽고 씁니다. 개인 토큰을 한 번 넣으면 이 기기에만 저장됩니다.</p>
     <ol>
       <li>github.com → 프로필 → Settings → Developer settings → Personal access tokens → <b>Fine-grained tokens</b> → Generate new token</li>
@@ -491,6 +491,16 @@ async function act(id, action, silent) {
   busy = false;
 }
 
+async function retryNotion(id) {
+  try {
+    pending[id] = { at: Date.now() }; savePending(); render();
+    const r = await gh("/dispatches", { method: "POST", body: JSON.stringify({ event_type: "inbox_action", client_payload: { id, action: "add" } }) });
+    if (r.status !== 204) throw new Error(`요청 실패 ${r.status}`);
+    toast("다시 요청했어요. 30초쯤 뒤에 확인됩니다");
+    pollLinks(id);
+  } catch (e) { delete pending[id]; savePending(); render(); toast(e.message); }
+}
+
 async function pollLinks(id, tries = 12) {
   for (let i = 0; i < tries; i++) {
     await new Promise(r => setTimeout(r, 8000));
@@ -507,6 +517,7 @@ document.addEventListener("click", e => {
   const b = e.target.closest("button");
   if (!b) return;
   if (b.dataset.act) act(b.dataset.id, b.dataset.act);
+  else if (b.dataset.retry) retryNotion(b.dataset.retry);
   else if (b.dataset.open) { const id = b.dataset.open; open.has(id) ? open.delete(id) : open.add(id); render(); }
   else if (b.dataset.status) { statusFilter = b.dataset.status; quick = ""; remember(LS.status, statusFilter); render(); }
   else if (b.dataset.cat) { catFilter = b.dataset.cat; remember(LS.cat, catFilter); render(); }
