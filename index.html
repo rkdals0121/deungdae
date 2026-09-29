@@ -197,6 +197,11 @@
   @media (hover: hover) and (min-width: 700px) { .keys { display: block; } }
   kbd { font-family: "IBM Plex Mono", monospace; font-size: 11px; padding: 1px 5px; border: 1px solid var(--rock-line); border-radius: 4px; background: var(--rock); }
 
+  .skel { height: 132px; border-radius: 14px; background: linear-gradient(90deg, var(--rock) 0%, var(--sea-2) 50%, var(--rock) 100%); background-size: 200% 100%; animation: shimmer 1.2s infinite; margin-bottom: 10px; border: 1px solid var(--rock-line); }
+  @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+  @media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
+  body.selecting .toast { bottom: 84px; }
+
   .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%) translateY(8px); background: var(--ink); color: var(--sea); padding: 10px 14px; border-radius: 12px; font-size: 13.5px; opacity: 0; transition: opacity .18s, transform .18s; display: flex; gap: 12px; align-items: center; max-width: calc(100% - 32px); box-shadow: 0 8px 24px rgba(0,0,0,.25); }
   .toast.show { opacity: 1; transform: translateX(-50%); }
   .toast button { border: 0; background: none; color: var(--lamp); font-weight: 600; padding: 0; }
@@ -226,7 +231,7 @@
 <div class="chips" id="cats"></div>
 <div class="keys">단축키 <kbd>J</kbd><kbd>K</kbd> 이동 · <kbd>X</kbd> 버리기 · <kbd>Enter</kbd> 남기기 · <kbd>O</kbd> 원문 · <kbd>/</kbd> 검색</div>
 
-<main id="main"></main>
+<main id="main"><div class="skel"></div><div class="skel"></div><div class="skel"></div></main>
 <div class="selbar"><span class="n" id="selN">0개 선택</span><button id="selCancel">취소</button><button class="drop" id="selTrash">버리기</button></div>
 <dialog id="settingsDlg"><div class="sheet" id="sheet"></div></dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -367,14 +372,14 @@ function render() {
   for (const it of items) counts[statusOf(it)] = (counts[statusOf(it)] || 0) + 1;
   for (const k of Object.keys(counts)) $(`#n-${k}`).textContent = counts[k];
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.status === statusFilter));
-  $("#sub").textContent = today().slice(5).replace("-", "/") + " 기준";
+  const nToday = items.filter(i => statusOf(i) === "new" && i.first_seen === today()).length;
+  const nSoon = items.filter(i => statusOf(i) === "new" && (d => d !== null && d >= 0 && d <= 7)(dday(i.deadline))).length;
+  $("#sub").textContent = nToday || nSoon ? `오늘 ${nToday} · 마감 7일 ${nSoon}` : today().slice(5).replace("-", "/") + " 기준";
   $("#sort").textContent = sortMode === "deadline" ? "마감 가까운 순" : "최근 발견 순";
   $("#sort").style.visibility = statusFilter === "new" ? "visible" : "hidden";
 
   const cats = ["전체", ...new Set(items.filter(i => statusOf(i) === statusFilter).map(i => i.category))];
   if (!cats.includes(catFilter)) catFilter = "전체";
-  const nToday = items.filter(i => statusOf(i) === "new" && i.first_seen === today()).length;
-  const nSoon = items.filter(i => statusOf(i) === "new" && (d => d !== null && d >= 0 && d <= 7)(dday(i.deadline))).length;
   const quickChips = statusFilter === "new"
     ? `<button class="chip q ${quick === "today" ? "on" : ""}" data-quick="today">오늘 새로 ${nToday}</button><button class="chip q ${quick === "soon" ? "on" : ""}" data-quick="soon">마감 7일 ${nSoon}</button><span class="sep"></span>`
     : "";
@@ -583,8 +588,9 @@ async function openSettings() {
   $("#closeDlg").onclick = () => dlg.close();
   let cfg = null;
   try { cfg = await readJson("state/config.json", null); } catch (e) {}
+  const cnt = {}; for (const it of items) cnt[it.source] = (cnt[it.source] || 0) + 1;
   const srcRow = s => `
-    <div class="box"><details><summary><div class="t"><span>${esc(s.name)}</span><span class="cat">${esc(s.category)} · ${s.notify === "digest" ? "월요일 묶음" : "즉시 메일"}</span><span class="when">기준 보기</span></div></summary>
+    <div class="box"><details><summary><div class="t"><span>${esc(s.name)}</span><span class="cat">${esc(s.category)} · ${s.notify === "digest" ? "월요일 묶음" : "즉시 메일"}</span><span class="when">${cnt[s.name] ? `수신함 ${cnt[s.name]}건 · ` : ""}기준 보기</span></div></summary>
       <div class="words"><span class="lbl">통과 (제목에 하나라도 있으면)</span>${s.keywords.length ? s.keywords.map(w => `<span class="word">${esc(w)}</span>`).join("") : `<span class="word">전부</span>`}</div>
       <div class="words"><span class="lbl">제외 (있으면 버림)</span>${s.exclude.map(w => `<span class="word no">${esc(w)}</span>`).join("")}</div>
       <div class="words"><a class="word" href="${esc(s.url)}" target="_blank" rel="noopener">게시판 열기 ↗</a></div>
