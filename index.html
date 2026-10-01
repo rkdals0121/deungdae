@@ -167,6 +167,13 @@
   .word { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--sea-2); color: var(--ink-2); }
   .word.no { text-decoration: line-through; color: var(--ink-3); }
   .words .lbl { font-size: 12px; color: var(--ink-3); width: 100%; margin-top: 4px; }
+  details.set { display: inline; }
+  details.set > summary { display: inline; list-style: none; cursor: pointer; }
+  details.set > summary::-webkit-details-marker { display: none; }
+  details.set[open] { display: block; width: 100%; }
+  .word.yes-set { background: var(--lamp-soft); color: var(--ink); font-weight: 500; }
+  .word.no-set { background: var(--sea-2); color: var(--rust); font-weight: 500; }
+  pre.crit { white-space: pre-wrap; font: 13px/1.6 "IBM Plex Sans KR", sans-serif; color: var(--ink-2); margin: 10px 0 0; max-height: 360px; overflow: auto; }
   .catdef { display: grid; grid-template-columns: 64px 1fr; gap: 6px 10px; font-size: 14px; }
   .catdef b { font-weight: 600; }
   .catdef span { color: var(--ink-2); }
@@ -632,20 +639,45 @@ async function openSettings() {
   let cfg = null;
   try { cfg = await readJson("state/config.json", null); } catch (e) {}
   const cnt = {}; for (const it of items) cnt[it.source] = (cnt[it.source] || 0) + 1;
+  const SETS = {
+    esg_climate: "ESG·기후환경 단어", academy: "아카데미·캠프 단어", diplomacy_oda: "공공외교·ODA·해외봉사 단어",
+    activity_form: "활동 형태 (서포터즈·기자단·홍보대사·청년정책 참여단 등)", corp: "대기업 이름", gov: "정부부처·공공기관 이름",
+    scholarship: "장학 단어", common_exclude: "공통 제외: 채용·입찰·대학원·청소년 대상·창작물 전용 공모·학사 공지",
+    local_only: "지방 한정: 서울·인천 외 지역명 (지역 한정 장학 제외용)",
+  };
+  const sets = cfg?.keyword_sets || {};
+  const pill = (w, no) => `<span class="word ${no ? "no" : ""}">${esc(w)}</span>`;
+  const group = (list, no) => {
+    if (!list || !list.length) return no ? `<span class="word">없음</span>` : `<span class="word">전부 (제목 상관없이)</span>`;
+    return list.map(w => {
+      if (typeof w === "string" && w.startsWith("$")) {
+        const k = w.slice(1), arr = sets[k] || [];
+        return `<details class="set"><summary><span class="word ${no ? "no-set" : "yes-set"}">${esc(SETS[k] || k)} · ${arr.length}개 ▾</span></summary><div class="words">${arr.map(x => pill(x, no)).join("")}</div></details>`;
+      }
+      return pill(w, no);
+    }).join("");
+  };
   const srcRow = s => `
-    <div class="box"><details><summary><div class="t"><span>${esc(s.name)}</span><span class="cat">${esc(s.category)} · ${s.notify === "digest" ? "월요일 묶음" : "즉시 메일"}</span><span class="when">${cnt[s.name] ? `수신함 ${cnt[s.name]}건 · ` : ""}기준 보기</span></div></summary>
-      <div class="words"><span class="lbl">통과 (제목에 하나라도 있으면)</span>${s.keywords.length ? s.keywords.map(w => `<span class="word">${esc(w)}</span>`).join("") : `<span class="word">전부</span>`}</div>
-      <div class="words"><span class="lbl">제외 (있으면 버림)</span>${s.exclude.map(w => `<span class="word no">${esc(w)}</span>`).join("")}</div>
+    <div class="box"><details><summary><div class="t"><span>${esc(s.name)}</span><span class="cat">${esc(s.category)}</span><span class="when">${cnt[s.name] ? `수신함 ${cnt[s.name]}건 · ` : ""}기준 ▾</span></div></summary>
+      <div class="words"><span class="lbl">제목에 아래 중 하나가 있으면 가져옴</span>${group(s.keywords_raw ?? s.keywords, false)}</div>
+      <div class="words"><span class="lbl">그래도 아래가 있으면 버림</span>${group(s.exclude_raw ?? s.exclude, true)}</div>
       <div class="words"><a class="word" href="${esc(s.url)}" target="_blank" rel="noopener">게시판 열기 ↗</a></div>
     </details></div>`;
+  const briefRow = b => `
+    <div class="box"><details><summary><div class="t"><span>${esc(b.name)}</span><span class="cat">${esc(b.category)}</span><span class="when">검색 기준 ▾</span></div></summary>
+      <pre class="crit">${esc(b.criteria)}</pre></details></div>`;
   const byCat = {};
   for (const s of (cfg?.sources || [])) (byCat[s.category] = byCat[s.category] || []).push(s);
   sheet.innerHTML = `
     <div class="head"><h2>설정</h2><button class="iconbtn" id="closeDlg" aria-label="닫기">✕</button></div>
-    <p>등대는 아래 게시판을 2시간마다 확인하고, 제목이 기준에 맞는 새 글만 가져옵니다. 기준은 카톡 브리핑 루틴(월·화·수·목·금)의 조건을 옮긴 것입니다.${cfg ? ` 마지막 확인 ${esc(cfg.checked_at)}.` : ""}</p>
+    <p>등대는 두 가지로 공고를 찾습니다. ① 카톡 루틴과 같은 기준의 웹 검색, ② 주요 게시판 직접 감시. 둘 다 2시간마다 돌고, 한 번 본 공고는 다시 가져오지 않습니다.${cfg ? ` 마지막 확인 ${esc(cfg.checked_at)}.` : ""}</p>
     <h3>분류가 뜻하는 것</h3>
     <div class="box catdef">${CATDEF.map(([c, d]) => `<b>${c}</b><span>${d}</span>`).join("")}</div>
-    <h3>감시하는 게시판 ${cfg ? cfg.sources.length + "개" : ""}</h3>
+    <h3>① 루틴 기준 웹 검색 ${cfg?.briefs ? cfg.briefs.length + "개" : ""}</h3>
+    <p>카톡 루틴에 설정한 검색 기준을 그대로 옮겨, ${esc(String(cfg?.settings?.search_every_hours ?? 2))}시간마다 Google 검색으로 찾습니다. 장학재단·기관 홈페이지처럼 아래 게시판에 없는 곳도 여기서 잡힙니다.</p>
+    ${(cfg?.briefs || []).map(briefRow).join("") || "<p>아직 없음</p>"}
+    <h3>② 직접 감시하는 게시판 ${cfg ? cfg.sources.length + "개" : ""}</h3>
+    <p>새 글을 놓치지 않으려고 아래 게시판은 글 목록을 직접 봅니다. 각 게시판을 누르면 어떤 제목을 가져오고 버리는지 나옵니다.</p>
     ${cfg ? Object.keys(byCat).map(c => `<p style="margin:10px 0 4px"><b>${esc(c)}</b> ${byCat[c].length}</p>` + byCat[c].map(srcRow).join("")).join("")
           : `<p>기준 파일(state/config.json)이 아직 없어요. 봇이 다음에 돌 때 생깁니다.</p>`}
     <h3>기준을 바꾸려면</h3>
