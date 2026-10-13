@@ -274,7 +274,28 @@ try {
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const remember = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
-function token() { try { return localStorage.getItem(LS.token) || ""; } catch (e) { return ""; } }
+// 토큰은 localStorage 와 쿠키 두 곳에 둔다. 한쪽이 지워져도(브라우저 정리, 사파리의 7일 규칙 등) 다른 쪽에서 되살린다.
+function cookieToken() { const m = document.cookie.match(/(?:^|; )dd_t=([^;]+)/); return m ? decodeURIComponent(m[1]) : ""; }
+function saveToken(v) {
+  remember(LS.token, v);
+  try { document.cookie = `dd_t=${encodeURIComponent(v)}; max-age=${400 * 86400}; path=/; SameSite=Lax; Secure`; } catch (e) {}
+}
+function clearToken() {
+  try { localStorage.removeItem(LS.token); } catch (e) {}
+  try { document.cookie = "dd_t=; max-age=0; path=/; SameSite=Lax; Secure"; } catch (e) {}
+}
+function token() {
+  let t = "";
+  try { t = localStorage.getItem(LS.token) || ""; } catch (e) {}
+  if (!t) { t = cookieToken(); if (t) remember(LS.token, t); }
+  return t;
+}
+// 메일 링크·'내 링크'(주소 끝 #t=토큰)로 열면 입력 없이 바로 들어간다. 주소창에 남지 않게 바로 지운다.
+(function () {
+  const m = location.hash.match(/[#&]t=([^&]+)/);
+  if (m) { saveToken(decodeURIComponent(m[1])); history.replaceState(null, "", location.pathname + location.search); }
+  else if (token()) saveToken(token());   // 열 때마다 두 곳 모두 갱신
+})();
 function savePending() { remember(LS.pending, JSON.stringify(pending)); }
 function today() { return new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10); }
 const days = (a, b) => Math.round((new Date(b + "T00:00:00+09:00") - new Date(a + "T00:00:00+09:00")) / 864e5);
@@ -355,7 +376,7 @@ function renderSetup(reason) {
     <input id="tokenInput" type="password" placeholder="github_pat_…" autocomplete="off">
     <div class="actions"><button class="keep" id="saveToken">저장하고 열기</button></div>
   </div>`;
-  $("#saveToken").onclick = () => { const v = $("#tokenInput").value.trim(); if (!v) return; remember(LS.token, v); load(); };
+  $("#saveToken").onclick = () => { const v = $("#tokenInput").value.trim(); if (!v) return; saveToken(v); load(); };
 }
 
 function matchesQuery(it) {
@@ -689,9 +710,17 @@ async function openSettings() {
     <p>저장소의 <code>watchlist.yml</code> 한 파일입니다. 게시판 추가, 통과·제외 단어 수정 모두 거기서. 바꾸고 싶은 건 Claude에게 제목만 말하면 됩니다.</p>
     <div class="words"><a class="word" href="https://github.com/${OWNER}/${REPO}/blob/main/watchlist.yml" target="_blank" rel="noopener">watchlist.yml 열기 ↗</a><a class="word" href="https://github.com/${OWNER}/${REPO}/actions" target="_blank" rel="noopener">실행 기록 ↗</a></div>
     <h3>이 기기</h3>
+    <h3>다른 기기·브라우저에서 입력 없이 열기</h3>
+    <p>아래 버튼으로 복사한 주소로 열면 토큰을 다시 넣지 않아도 됩니다. 즐겨찾기나 휴대폰 홈 화면에 그 주소로 추가해 두세요. 주소 안에 토큰이 들어 있으니 남에게 보내지 마세요.</p>
+    <div class="actions"><button class="keep" id="copyLink">내 링크 복사</button></div>
     <div class="actions"><button class="ghost" id="resetToken">토큰 지우고 다시 설정</button></div>`;
   $("#closeDlg").onclick = () => dlg.close();
-  $("#resetToken").onclick = () => { if (confirm("이 기기에 저장된 GitHub 토큰을 지웁니다. 계속할까요?")) { try { localStorage.removeItem(LS.token); } catch (e) {} dlg.close(); renderSetup(); } };
+  $("#resetToken").onclick = () => { if (confirm("이 기기에 저장된 GitHub 토큰을 지웁니다. 계속할까요?")) { clearToken(); dlg.close(); renderSetup(); } };
+  $("#copyLink").onclick = async () => {
+    const url = location.origin + location.pathname + "#t=" + encodeURIComponent(token());
+    try { await navigator.clipboard.writeText(url); $("#copyLink").textContent = "복사됨 — 즐겨찾기나 홈 화면에 이 주소로 추가"; }
+    catch (e) { prompt("이 주소를 복사해 즐겨찾기에 추가하세요", url); }
+  };
 }
 $("#settings").onclick = openSettings;
 $("#settingsDlg").addEventListener("click", e => { if (e.target === e.currentTarget) e.currentTarget.close(); });
